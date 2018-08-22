@@ -35,10 +35,10 @@ class dbInfo(object):
                 lang = "CN"
             else:
                 lang = None
-        
+                
         title = content.find_all(class_="markdown")[0].find_all('p')[-1].text
         title = title.split(': ')[1]
-        
+
         source = "Luscious"
         
         page_link = address

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Mar 26 17:13:51 2018
@@ -25,7 +25,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO) 
 rq = time.strftime('%Y%m%d%H%M', time.localtime(time.time()))
 logfile = rq+'.log'
-fh = logging.FileHandler(logfile, mode='a') #追加模式，注意大小
+fh = logging.FileHandler(logfile, mode='a') #追加模式，注意控制文件大小
 fh.setLevel(logging.INFO)  # 输出到file的log等级的开关
 formatter = logging.Formatter("%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s")
 fh.setFormatter(formatter)
@@ -257,9 +257,9 @@ def Pic_saver():
     cursor = conn.cursor()
     sql1 = "UPDATE download_links SET used=2, id=LAST_INSERT_ID(id) WHERE used=1 LIMIT 1" 
     sql2 = "SELECT * FROM download_links WHERE ROW_COUNT()>0 and id=LAST_INSERT_ID()"
-    alive = 3
+    alive = 1
     while alive:
-#        alive += 1
+        alive += 1
         try: #出队一条数据，将状态由1改为2，表明现在正在接受下载
             cursor.execute(sql1)
             cursor.execute(sql2)
@@ -271,7 +271,7 @@ def Pic_saver():
             try:
                 src = result[0]
                 filepath = result[1]
-                myDownload(src, filepath, mode=1) #1为requests下载，2为多线程下载，3为wget下载
+                myDownload(src, filepath, mode=3) #1为requests下载，2为多线程下载，3为wget下载
                 #如果下载成功，则状态改为3，表示已完成
                 sql4 = "UPDATE download_links SET used=3 WHERE id='%d'" %result[3]
                 cursor.execute(sql4)
@@ -296,7 +296,6 @@ def Spider_engine(mode='n'):
     sql0 = "SELECT * FROM comics WHERE status=2"
     sql1 = "UPDATE comics SET status=2, comic_id=LAST_INSERT_ID(comic_id) WHERE status=1 LIMIT 1" 
     sql2 = "SELECT * FROM comics WHERE ROW_COUNT()>0 and comic_id=LAST_INSERT_ID()"
-    '''
     if mode=='c':
         try: #续传模式，先检查并处理队列里有无爬取链接到一半的页面，完成他们(只有Lus网站有这种特性)
             cursor.execute(sql0)
@@ -316,7 +315,6 @@ def Spider_engine(mode='n'):
                 nhen_engin.getOthers()
         conn.close()
         return
-        '''
     #如无，则开始新过程  
     try: #出队一条数据，将状态由1改为2，表明现在正在接受读取
         cursor.execute(sql1)

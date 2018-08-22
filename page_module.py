@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Tue Aug 14 13:10:41 2018
@@ -11,12 +11,12 @@ import time
 from bs4 import BeautifulSoup as Bs
 from requests.adapters import HTTPAdapter
 from urllib import request 
-import threading
 import wget
 import os
+import asyncio
+from settings import head, proxies
 
-head = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'
-                     }
+
 
 def Get_page(page_address, max_retry=3):
     pic_page = None
@@ -40,82 +40,94 @@ def Get_page(page_address, max_retry=3):
     
     return content
 
-def Download_img(page_address):
+def Download_img(page_address, agent=False):
     requested = requests.Session()
     requested.mount('https://', HTTPAdapter(max_retries=3))
     requested.mount('http://', HTTPAdapter(max_retries=3))
-    pic_content = requested.get(page_address, headers=head, timeout=8).content
+    pic_content = requested.get(page_address, headers=head, proxies=None, timeout=8).content
+    if agent:
+        pic_content = requested.get(page_address, headers=head, proxies=proxies, timeout=8).content
     return pic_content
 
 
 class downloader:
-    def __init__(self, url, download_to, max_block_size=1024*30, thread_num=0):
+    def __init__(self, url, download_to, max_block_size=1024*1024, thread_num=0, agent=False):
         self.url = url
         self.name = download_to
         self.headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'}
         req = request.Request(self.url, headers=self.headers)
         response = request.urlopen(req)
-        file_size = response.headers.getheader('Content-Length')
+        file_size = response.getheader('Content-Length')
         self.total = int(file_size)
-        # 根据要求或者块大小计算线程个数
         if thread_num:
-            self.thread_num = thread_num
+            self.thread_num = thread_num-1
         else:
-            self.thread_num = (self.total+max_block_size-1)//max_block_size
-        print(self.thread_num)
-        self.event_list = [threading.Event() for _ in range(self.thread_num)]
-        self.event_list[0].set()
+            self.thread_num = (self.total+max_block_size-1)//max_block_size-1
+        self.agent = agent
+
 #        print('File size is %d KB'%(self.total/1024))
 
     # 划分每个下载块的范围
     def get_range(self):
         ranges=[]
-        offset = self.total//self.thread_num
-        for i in range(self.thread_num):
-            if i == self.thread_num-1:
-                ranges.append((i*offset,''))
+        offset = self.total//(self.thread_num+1)
+        for i in range(0, self.total, offset):
+            if i == (self.thread_num)*offset:
+                ranges.append((i,self.total))
             else:
-                ranges.append((i*offset,(i+1)*offset))
+                ranges.append((i,i+offset-1))
         return ranges
 
-    def download(self,start,end, event_num):
+    async def download(self,start,end, event_num):
         post_data = {'Range':'Bytes=%s-%s' % (start,end),'Accept-Encoding':'*'}
         post_data['user-agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'
         # headers = urllib.urlencode(post_data)
-        req = request.Request(self.url, headers=post_data)
-        res = request.urlopen(req)
-        # res = requests.get(self.url,headers=headers)
-#        print('%s:%s chunk starts to download'%(start,end))
-        self.event_list[event_num].wait()
-        self.fd.seek(start)
-        self.fd.write(res.read())
-        print("Number[%d] block was written"%event_num)
-        if event_num<len(self.event_list)-1:
-            self.event_list[event_num+1].set()
+        res_get = lambda:requests.get(self.url, headers=post_data, proxies=None)
+        if self.agent:
+            res_get = lambda:requests.get(self.url, headers=post_data, proxies=proxies)
+        loop = asyncio.get_event_loop()
+        res = await loop.run_in_executor(None, res_get)
+        self.fd.seek(start,0)
+        self.fd.write(res.content)
+#        print("Number[%d] block was written"%event_num)
+
 
     def run(self):
-        with open(self.name,'ab') as self.fd:
+        open(self.name, 'w').close() #这句话必须有，不能省略然后底下用ab，原因似乎跟创建文件后指针才能自由移动有关
+        with open(self.name,'rb+') as self.fd:
+            loop = asyncio.get_event_loop()
             thread_list = []
-            n = 0
+            n = 1
             for ran in self.get_range():
                 start,end = ran
-                print('thread %d Range:%s ~ %s Bytes'%(n, start, end))
-                thread = threading.Thread(target=self.download, args=(start,end,n))
-                thread.start()
-                thread_list.append(thread)
+#                print(start, end)
+                dd = self.download(start, end, n)
+                thread_list.append(dd)
                 n += 1
-            map(lambda thd:thd.join(), thread_list)
-            print('download success')
+            loop.run_until_complete(asyncio.gather(*thread_list))
+#            loop.run_until_complete(asyncio.wait(thread_list))
+#            loop.close()
+#            print('download success')
             
-def myDownload(src, filepath, mode=3):
-    if mode==1:
+def time_deco(func):
+    def wrapper(*args, **kwargs):
+        startTime = time.time()
+        func(*args, **kwargs)
+        endTime = time.time()
+        msecs = (endTime - startTime)*1000
+        print("time is %d ms" %msecs)
+    return wrapper
+ 
+#@time_deco           
+def myDownload(src, filepath, mode=2, thread_num=10):
+    if mode==1: #单线程下载，目前最快
         img_file = Download_img(src)
         with open(filepath, 'wb') as file:
             file.write(img_file)
-    elif mode==2:
-        dfile = downloader(src, filepath, thread_num=5)
+    elif mode==2: #多协程下载，比多线程强，实测挺水
+        dfile = downloader(src, filepath, thread_num=thread_num)
         dfile.run()
-    else:
+    else: #易被封锁
         [dirname, _] = os.path.split(filepath)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
