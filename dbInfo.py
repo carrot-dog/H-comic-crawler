@@ -21,6 +21,26 @@ class dbInfo(object):
                                     db=DB,charset='utf8',
                                     )
         self.cursor = self.conn.cursor()
+        build_table1 = '''CREATE TABLE IF NOT EXISTS comics(
+        comic_id INT UNSIGNED AUTO_INCREMENT,
+        comic_title TEXT NOT NULL,
+        page_link TEXT NOT NULL,
+        status TINYINT NOT NULL,
+        source VARCHAR(10) NOT NULL,
+        i_date DATETIME,
+        f_date DATETIME,
+        author VARCHAR(100),
+        language CHAR(2),
+        PRIMARY KEY(comic_id))ENGINE=InnoDB DEFAULT CHARSET=utf8'''
+        build_table2 = '''CREATE TABLE IF NOT EXISTS download_links(
+        link TEXT,
+        name TEXT,
+        used TINYINT,
+        id INT UNSIGNED AUTO_INCREMENT,
+        PRIMARY KEY(id))ENGINE=InnoDB DEFAULT CHARSET=utf8'''
+        self.cursor.execute(build_table1)
+        self.cursor.execute(build_table2)
+        self.conn.commit()
         
     def __del__(self):
         self.conn.close()
