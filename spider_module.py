@@ -20,6 +20,8 @@ import pickle
 import hashlib
 from settings import *
 import logging
+import redis
+from dbInfo import RedisWriter, RedisReader
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO) 
@@ -32,6 +34,9 @@ fh.setFormatter(formatter)
 # 第四步，将logger添加到handler里面
 logger.addHandler(fh)
 
+pool = redis.ConnectionPool(host='localhost', password=3233836, db=1, port=6379, decode_responses=True)
+rconn = redis.Redis(connection_pool=pool)
+
 class Luscious(object):
     def __init__(self, address, comic_name):
         self.head = {'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
@@ -42,18 +47,12 @@ class Luscious(object):
                      }
         self.address = address
         self.content = Get_page(address)
-        self.conn = pymysql.connect(host=HOST,port=PORT,
-                                    user=USER,password=PASSWD,
-                                    db=DB,charset='utf8',
-                                    )
-        self.cursor = self.conn.cursor()
         cover = self.content.find_all(class_="album_cover_item")[0].a['href']
         cover = "https://members.luscious.net"+cover
         self.cover = cover
         self.comic_name = comic_name
 
     def __del__(self): #以主页链接映射出的hash作为文件名保存当前进度
-        self.conn.close()
         if self.cover:
             md5 = hashlib.md5()
             md5.update(self.address.encode('utf8'))
@@ -81,17 +80,11 @@ class Luscious(object):
                 nexthref = None
             self.cover = nexthref
             filename = self.content.select_one('h1[id="picture_title"]').text + ".jpg"
-            
-            sql_in = "INSERT INTO download_links(link,name,used)\
-                        VALUES('%s','%s','%d')" %(imgsrc, abs_path+self.comic_name+'/'+filename, 1)
+            path = abs_path+self.comic_name+'/'+filename
             try:
-                self.cursor.execute(sql_in)
-                self.conn.commit()
+                RedisWriter(rconn, imgsrc, path, '1')
             except:
-                self.conn.close()
-                logger.error("Lus下载列表插入失败！")   
-        logger.info("One of Lus download_links over!")
-        self.cursor.close()
+                logger.error("%s下载插入失败" %imgsrc)
 
 
 class l8Comic(object):
@@ -104,21 +97,12 @@ class l8Comic(object):
                      }
         self.address = address
         self.content = Get_page(address)
-        self.conn = pymysql.connect(host=HOST,port=PORT,
-                                    user=USER,password=PASSWD,
-                                    db=DB,charset='utf8',
-                                    )
-        self.cursor = self.conn.cursor()
         cover = self.content.select('.btn-primary')[-1].get('href')
         self.key_number = cover.split('/')[2]
         cover = "https://18comic.org"+cover
         self.cover = cover
         self.comic_name = comic_name
         
-
-#        self.cover = None
-    def __del__(self): #以主页链接映射出的hash作为文件名保存当前进度
-        self.conn.close()
     
     def getOthers(self):
         self.content = Get_page(self.cover)
@@ -126,20 +110,12 @@ class l8Comic(object):
         for src in imgsrcs:
             src_name = src.parent.get('id')
             full_src = "https://18comic.org/media/photos/"+self.key_number+'/'+src_name
-            sql_in = "INSERT INTO download_links(link,name,used)\
-                        VALUES('%s','%s','%d')" %(full_src, abs_path+self.comic_name+'/'+src_name, 1)
+            path = abs_path+self.comic_name+'/'+src_name
             try:
-                self.cursor.execute(sql_in)
+                RedisWriter(rconn, full_src, path, '1')
             except:
-                self.conn.rollback()
-                logger.error("18comic下载列表插入失败！")
-        try:
-            self.conn.commit()
-            logger.info("One of 10comics download_links over!")
-        except:
-            self.conn.close()
-            logger.error("18comic下载列表插入失败！")
-        self.cursor.close()
+                logger.error("%s下载插入失败" %full_src)
+
         
 class G04s(object):
     def __init__(self, address, comic_name):
@@ -151,17 +127,8 @@ class G04s(object):
                      }
         self.address = address
         self.content = Get_page(address)
-        self.conn = pymysql.connect(host=HOST,port=PORT,
-                                    user=USER,password=PASSWD,
-                                    db=DB,charset='utf8',
-                                    )
-        self.cursor = self.conn.cursor()
         self.comic_name = comic_name
         
-#        self.cover = None
-    def __del__(self): #以主页链接映射出的hash作为文件名保存当前进度
-        self.conn.close()
-    
     def getOthers(self):
         pics = self.content.select_one(".pics")
         imgsrcs = pics.find_all('li')
@@ -174,20 +141,11 @@ class G04s(object):
             else:
                 full_src = src.img['src']
             src_name = full_src.split('/')[-1]
-            sql_in = "INSERT INTO download_links(link,name,used)\
-                        VALUES('%s','%s','%d')" %(full_src, abs_path+self.comic_name+'/'+src_name, 1)
+            path = abs_path+self.comic_name+'/'+src_name
             try:
-                self.cursor.execute(sql_in)
+                RedisWriter(rconn, full_src, path, '1')
             except:
-                self.conn.rollback()
-                logger.error("604s下载列表插入失败！")
-        try:
-            self.conn.commit()
-            logger.info("One of 604s download_links over!")
-        except:
-            self.conn.close()
-            logger.error("604s下载列表插入失败！")   
-        self.cursor.close()
+                logger.error("%s下载插入失败" %full_src)
             
             
 class Nhentai(object):
@@ -200,17 +158,11 @@ class Nhentai(object):
                      }
         self.address = address
         self.content = Get_page(address)
-        self.conn = pymysql.connect(host=HOST,port=PORT,
-                                    user=USER,password=PASSWD,
-                                    db=DB,charset='utf8',
-                                    )
         self.page_srcs = self.content.find_all(class_="gallerythumb")
-        self.cursor = self.conn.cursor()
         self.comic_name = comic_name
         
 #        self.cover = None
     def __del__(self): #以主页链接映射出的hash作为文件名保存当前进度
-        self.conn.close()
         if self.page_srcs:
             md5 = hashlib.md5()
             md5.update(self.address.encode('utf8'))
@@ -235,56 +187,36 @@ class Nhentai(object):
             content = Get_page(page_addr)
             img_src = content.select_one('.fit-horizontal').get('src')
             src_name = img_src.split('/')[-1].zfill(9) #补0方便文件名排序
-            sql_in = "INSERT INTO download_links(link,name,used)\
-                        VALUES('%s','%s','%d')" %(img_src, abs_path+self.comic_name+'/'+src_name, 1)
+            path = abs_path+self.comic_name+'/'+src_name
             try:
-                self.cursor.execute(sql_in)
-                self.conn.commit()
+                RedisWriter(rconn, img_src, path, '1')
             except:
-                self.conn.rollback()
-                logger.error("nhentai下载列表插入失败！")
+                logger.error("%s下载插入失败" %img_src)
+            
         logger.info("One of nhentai download_links over!")
-        self.cursor.close()
     
 
 
 
 def Pic_saver():
-    conn = pymysql.connect(host=HOST,port=PORT,
-                                    user=USER,password=PASSWD,
-                                    db=DB,charset='utf8',
-                                    )
-    cursor = conn.cursor()
-    sql1 = "UPDATE download_links SET used=2, id=LAST_INSERT_ID(id) WHERE used=1 LIMIT 1" 
-    sql2 = "SELECT * FROM download_links WHERE ROW_COUNT()>0 and id=LAST_INSERT_ID()"
-    alive = 1
+    alive = 3
     while alive:
         alive += 1
         try: #出队一条数据，将状态由1改为2，表明现在正在接受下载
-            cursor.execute(sql1)
-            cursor.execute(sql2)
-            conn.commit()
-            result = cursor.fetchone()
+            src, filepath, used = RedisReader(rconn)
         except:
-            conn.rollback()
-        if result:
+            logger.error("a link failed when popped out!")
+            continue
+        if src:
             try:
-                src = result[0]
-                filepath = result[1]
-                myDownload(src, filepath, mode=3) #1为requests下载，2为多线程下载，3为wget下载
-                #如果下载成功，则状态改为3，表示已完成
-                sql4 = "UPDATE download_links SET used=3 WHERE id='%d'" %result[3]
-                cursor.execute(sql4)
-                conn.commit()
-            except: #如果下载失败，将状态由2改回1，留待以后下载
-                sql3 = "UPDATE download_links SET used=1 WHERE id='%d'" %result[3]
-                cursor.execute(sql3)
-                conn.commit()
+                myDownload(src, filepath, mode=1) #1为requests下载，2为多协程下载，3为wget下载
+                #如果下载成功，则正常出队
+            except: #如果下载失败，则再次入队，留待以后下载
+                RedisWriter(rconn, src, filepath, '1')
                 time.sleep(6) #考虑到访问过快的可能性，适当进行休眠
         else:
             alive -= 1
-            time.sleep(10)
-    conn.close() #等了一段时间也没取到新数据，关闭连接，退出
+            time.sleep(30)
 
 def Spider_engine(mode='n'):
     

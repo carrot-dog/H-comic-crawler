@@ -11,40 +11,42 @@ from page_module import *
 import pymysql
 import signal
 from settings import *
+import redis
 
 is_exit = False
 
-class dbInfo(object):
-    def __init__(self):
-        self.conn = pymysql.connect(host=HOST,port=PORT,
+def RedisWriter(rconn, src, path, used, listname='download_links'):
+    savestr = "湮".join([src, path, used]) #redis只能储存字符串，所以把信息拼成字符串，用的时候再分割
+    rconn.lpush(listname, savestr)
+def RedisReader(rconn, listname='download_links'):
+    savestr = rconn.rpop(listname) #按队列方式读取，先入先出
+    if savestr:
+        [src, path, used] = savestr.split("湮")
+        return src, path, used
+    else:
+        return None,None,None
+    
+
+def dbWriter(title, page_link, status, source, lang):
+    conn = pymysql.connect(host=HOST,port=PORT,
                                     user=USER,password=PASSWD,
                                     db=DB,charset='utf8',
                                     )
-        self.cursor = self.conn.cursor()
-        build_table1 = '''CREATE TABLE IF NOT EXISTS comics(
-        comic_id INT UNSIGNED AUTO_INCREMENT,
-        comic_title TEXT NOT NULL,
-        page_link TEXT NOT NULL,
-        status TINYINT NOT NULL,
-        source VARCHAR(10) NOT NULL,
-        i_date DATETIME,
-        f_date DATETIME,
-        author VARCHAR(100),
-        language CHAR(2),
-        PRIMARY KEY(comic_id))ENGINE=InnoDB DEFAULT CHARSET=utf8'''
-        build_table2 = '''CREATE TABLE IF NOT EXISTS download_links(
-        link TEXT,
-        name TEXT,
-        used TINYINT,
-        id INT UNSIGNED AUTO_INCREMENT,
-        PRIMARY KEY(id))ENGINE=InnoDB DEFAULT CHARSET=utf8'''
-        self.cursor.execute(build_table1)
-        self.cursor.execute(build_table2)
-        self.conn.commit()
-        
-    def __del__(self):
-        self.conn.close()
+    cursor = conn.cursor()
+    sql_insert = "INSERT INTO comics (comic_title, page_link, status, source, i_date, language)\
+        VALUES ('%s','%s','%d','%s', NOW(),'%s')"%\
+        (title, page_link, status, source, lang)
+    try:
+        cursor.execute(sql_insert)
+        conn.commit()
+    except:
+        conn.rollback()
+        raise Exception("insert error!")
+    conn.close()
 
+class dbInfo(object):
+    def __init__(self):
+        pass
             
     def engineLuscious(self, address):
         content = Get_page(address)
@@ -63,15 +65,7 @@ class dbInfo(object):
         
         page_link = address
         
-        sql_insert = "INSERT INTO comics (comic_title, page_link, status, source, i_date, language)\
-        VALUES ('%s','%s','%d','%s', NOW(),'%s')"%\
-        (title, page_link, 1, source, lang)
-        try:
-            self.cursor.execute(sql_insert)
-            self.conn.commit()
-        except:
-            self.conn.rollback()
-            raise Exception("insert error!")
+        dbWriter(title, page_link, 1, source, lang)
             
     def engine18Comic(self, address):
         content = Get_page(address)
@@ -80,15 +74,8 @@ class dbInfo(object):
         source = "18comic"
         
         page_link = address
-        sql_insert = "INSERT INTO comics (comic_title, page_link, status, source, i_date, language)\
-        VALUES ('%s','%s','%d','%s', NOW(),'%s')"%\
-        (title, page_link, 1, source, lang)
-        try:
-            self.cursor.execute(sql_insert)
-            self.conn.commit()
-        except:
-            self.conn.rollback()
-            raise Exception("insert error!")
+        
+        dbWriter(title, page_link, 1, source, lang)
             
     def engine604S(self, address):
         content = Get_page(address)
@@ -97,15 +84,7 @@ class dbInfo(object):
         source = "604s"
         
         page_link = address
-        sql_insert = "INSERT INTO comics (comic_title, page_link, status, source, i_date, language)\
-        VALUES ('%s','%s','%d','%s', NOW(),'%s')"%\
-        (title, page_link, 1, source, lang)
-        try:
-            self.cursor.execute(sql_insert)
-            self.conn.commit()
-        except:
-            self.conn.rollback()
-            raise Exception("insert error!")
+        dbWriter(title, page_link, 1, source, lang)
             
     def engineNhentai(self, address):
         content = Get_page(address)
@@ -117,15 +96,7 @@ class dbInfo(object):
             lang = None
         source = "nhentai"
         page_link = address
-        sql_insert = "INSERT INTO comics (comic_title, page_link, status, source, i_date, language)\
-        VALUES ('%s','%s','%d','%s', NOW(),'%s')"%\
-        (title, page_link, 1, source, lang)
-        try:
-            self.cursor.execute(sql_insert)
-            self.conn.commit()
-        except:
-            self.conn.rollback()
-            raise Exception("insert error!")
+        dbWriter(title, page_link, 1, source, lang)
 
     def engineSwitch(self, address):
         if "luscious" in address:
@@ -143,6 +114,8 @@ def handler(signum, frame):
     global is_exit
     is_exit = True
     print("input over!")
+    
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, handler)
@@ -157,7 +130,7 @@ if __name__ == "__main__":
                 dbinfo.engineSwitch(addr)
     except:
         print("just stoped!")
-        del dbinfo
+ 
 
 
     
