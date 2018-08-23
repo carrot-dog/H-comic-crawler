@@ -201,7 +201,6 @@ class Nhentai(object):
 def Pic_saver():
     alive = 3
     while alive:
-        alive += 1
         try: #出队一条数据，将状态由1改为2，表明现在正在接受下载
             src, filepath, used = RedisReader(rconn)
         except:
@@ -229,7 +228,7 @@ def Spider_engine(mode='n'):
     sql1 = "UPDATE comics SET status=2, comic_id=LAST_INSERT_ID(comic_id) WHERE status=1 LIMIT 1" 
     sql2 = "SELECT * FROM comics WHERE ROW_COUNT()>0 and comic_id=LAST_INSERT_ID()"
     if mode=='c':
-        try: #续传模式，先检查并处理队列里有无爬取链接到一半的页面，完成他们(只有Lus网站有这种特性)
+        try: #续传模式，先检查并处理队列里有无爬取链接到一半的页面，完成他们(只有Lus网站和nhentai有这种特性)
             cursor.execute(sql0)
             result0 = cursor.fetchall()
             logger.info("left %d items in half way" %len(result0))

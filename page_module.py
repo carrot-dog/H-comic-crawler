@@ -122,6 +122,9 @@ def time_deco(func):
 def myDownload(src, filepath, mode=2, thread_num=10):
     if mode==1: #单线程下载，目前最快
         img_file = Download_img(src)
+        [dirname, _] = os.path.split(filepath)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
         with open(filepath, 'wb') as file:
             file.write(img_file)
     elif mode==2: #多协程下载，比多线程强，实测挺水
