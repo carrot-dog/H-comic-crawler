@@ -10,10 +10,10 @@ Created on Thu Aug 16 09:48:23 2018
 mysql settings
 '''
 
-HOST = '192.168.50.72'
+HOST = '192.168.1.222'
 PORT=33006
-USER='liu'
-PASSWD='3233836'
+USER='user'
+PASSWD='password'
 DB='comic_links'
 
 abs_path = "/person_files/comic_downloads/"
