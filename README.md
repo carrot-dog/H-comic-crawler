@@ -7,11 +7,14 @@
     
 
 ## 环境
-Python3.6，需安装wget包
+Python3.6，需安装wget包，另需安装MySQL和Redis支持
 ```python
   pip install wget
+  pip install pymysql
+  pip install redis
 ```  
-需部署MySQL环境，数据库信息在settings.py中配置
+需部署MySQL环境，数据库信息在settings.py中配置<br>
+**2018/08/23更新**：需部署Redis环境，实现下载队列
 
 ## 使用
 主程序为dbInfo.py，main.py 和 main2.py，运行dbInfo.py并按提示输入漫画主页（非第一页）的网址，输入空格退出输入环节。
