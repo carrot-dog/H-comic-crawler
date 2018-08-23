@@ -8,7 +8,7 @@ Created on Thu Aug 16 16:41:38 2018
 Python有GIL锁，多线程无法充分利用多核性能，所以使用多进程
 """
 
-from comics.spider_module import Pic_saver
+from spider_module import Pic_saver
 import multiprocessing
 
 if __name__ =="__main__":

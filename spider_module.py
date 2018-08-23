@@ -107,14 +107,16 @@ class l8Comic(object):
     def getOthers(self):
         self.content = Get_page(self.cover)
         imgsrcs = self.content.find_all(class_="img-responsive-mw")
+        tolist = []
         for src in imgsrcs:
             src_name = src.parent.get('id')
             full_src = "https://18comic.org/media/photos/"+self.key_number+'/'+src_name
             path = abs_path+self.comic_name+'/'+src_name
-            try:
-                RedisWriter(rconn, full_src, path, '1')
-            except:
-                logger.error("%s下载插入失败" %full_src)
+            tolist.append((full_src, path, '1'))
+        try:
+            RedisWriter(rconn, full_src, path, '1')
+        except:
+            logger.error("%s等若干下载插入失败" %full_src)
 
         
 class G04s(object):
@@ -135,6 +137,7 @@ class G04s(object):
         cover_src = imgsrcs[0].img['src']
         cover_src.replace('2.jpg', '1.jpg')
         imgsrcs.insert(0, cover_src)
+        tolist = []
         for src in imgsrcs:
             if type(src)==str:
                 full_src = src
@@ -142,10 +145,11 @@ class G04s(object):
                 full_src = src.img['src']
             src_name = full_src.split('/')[-1]
             path = abs_path+self.comic_name+'/'+src_name
-            try:
-                RedisWriter(rconn, full_src, path, '1')
-            except:
-                logger.error("%s下载插入失败" %full_src)
+            tolist.append((full_src, path, '1'))
+        try:
+            RedisWriter(rconn, tolist)
+        except:
+            logger.error("%s等若干下载插入失败" %full_src)
             
             
 class Nhentai(object):

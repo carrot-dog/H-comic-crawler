@@ -15,9 +15,21 @@ import redis
 
 is_exit = False
 
-def RedisWriter(rconn, src, path, used, listname='download_links'):
-    savestr = "湮".join([src, path, used]) #redis只能储存字符串，所以把信息拼成字符串，用的时候再分割
-    rconn.lpush(listname, savestr)
+def RedisWriter(rconn, *args, listname='download_links'):
+    if len(args)==3:
+        (src, path, used) = args
+        savestr = "湮".join([src, path, used]) #redis只能储存字符串，所以把信息拼成字符串，用的时候再分割
+        rconn.lpush(listname, savestr)
+    elif len(args)==1:
+        with rconn.pipeline() as p:
+            for item in args[0]:
+                (src, path, used) = item
+                savestr = "湮".join([src, path, used])
+                p = p.lpush(listname, savestr)
+            p.execute()
+    else:
+        raise Exception("redis length error!a")
+            
 def RedisReader(rconn, listname='download_links'):
     savestr = rconn.rpop(listname) #按队列方式读取，先入先出
     if savestr:
